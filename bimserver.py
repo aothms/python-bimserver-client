@@ -48,7 +48,7 @@ class api:
     def __init__(self, hostname, username=None, password=None):
         self.url = "%s/json" % hostname
         if not hostname.startswith('http://') or not hostname.startswith('https://'):
-            self.url = "http://" % self.url
+            self.url = "http://%s" % self.url
             
         self.interfaces = set(map(
             operator.itemgetter("simpleName"), 
