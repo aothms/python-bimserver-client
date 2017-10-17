@@ -55,13 +55,23 @@ class api:
             self.MetaInterface.getServiceInterfaces()
         ))
         
+        self.version = "1.4" if "Bimsie1AuthInterface" in self.interfaces else "1.5"
+        
         if username is not None and password is not None:
-            self.token = self.Bimsie1AuthInterface.login(
+            auth_interface = getattr(self, "Bimsie1AuthInterface", getattr(self, "AuthInterface"))
+            self.token = auth_interface.login(
                 username=username,
                 password=password
             )            
             
     def __getattr__(self, interface):
         if self.interfaces is not None and interface not in self.interfaces:
+        
+            # Some form of compatibility:
+            if self.version == "1.4" and not interface.startswith("Bimsie1"):
+                return self.__getattr__("Bimsie1" + interface)
+            elif self.version == "1.5" and interface.startswith("Bimsie1"):
+                return self.__getattr__(interface[len("Bimsie1"):])
+                
             raise AttributeError("'%s' is does not name a valid interface on this server" % interface)
         return api.interface(self, interface)
