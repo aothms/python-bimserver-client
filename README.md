@@ -26,7 +26,34 @@ Example:
         sync=               "false",
         merge=              "false"
     )
+    
+    
+    # Download latest revision from a specified project
 
+    import json
+    from urllib import request
+    
+    project_name = "MyProject"
+    client = bimserver.api(server_address, username, password)
+    projects = client.ServiceInterface.getProjectsByName(name=project_name)
+    project = projects[0]
+    
+    serializer = client.ServiceInterface.getSerializerByName(serializerName='Ifc4 (Streaming)')
+    serializer_id = serializer.get('oid')
+    roid = projects[0].get('lastRevisionId')
+    
+    topicId = client.ServiceInterface.download(
+        roids=[roid],
+        serializerOid=serializer_id,
+        query=json.dumps({}),
+        sync='false',
+    )
+    
+    download_url = f"{server_address}/download?token={client.token}&zip=on&topicId={topicId}"
+    res = request.urlopen(download_url)
+    with open('res.zip', 'wb') as d:
+        d.write(res.read())
+    
 Or for BIMserver version 1.4:
 
     # Commit an IFC file into a newly created project
