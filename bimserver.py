@@ -44,7 +44,7 @@ class api:
         def __dir__(self):
             interFaceMethods =  self.api.MetaInterface.getServiceMethods(serviceInterfaceName="org.bimserver."+self.name)
             # TODO use long names
-            interFaceMethodNames = [method["name"] for method in interfaceMethods]
+            interFaceMethodNames = set(method["name"] for method in interfaceMethods)
             return sorted(set(api.interface.__dict__.keys() + self.__dict__.keys()).union(interFaceMethodNames))
 
             
@@ -57,10 +57,7 @@ class api:
         if not hostname.startswith('http://') and not hostname.startswith('https://'):
             self.url = "http://%s" % self.url
             
-        self.interfaces = set(map(
-            operator.itemgetter("simpleName"), 
-            self.MetaInterface.getServiceInterfaces()
-        ))
+        self.interfaces = set(si["simpleName"] for si in self.MetaInterface.getServiceInterfaces())
         
         self.version = "1.4" if "Bimsie1AuthInterface" in self.interfaces else "1.5"
         
