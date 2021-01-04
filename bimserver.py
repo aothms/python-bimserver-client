@@ -40,6 +40,13 @@ class api:
             
         def __getattr__(self, method):
             return lambda **kwargs: self.make_request(method, **kwargs)
+
+        def __dir__(self):
+            interFaceMethods =  self.api.MetaInterface.getServiceMethods(serviceInterfaceName="org.bimserver."+self.name)
+            # TODO use long names
+            interFaceMethodNames = [method["name"] for method in interfaceMethods]
+            return sorted(set(api.interface.__dict__.keys() + self.__dict__.keys()).union(interFaceMethodNames))
+
             
             
     token = None
@@ -75,3 +82,6 @@ class api:
                 
             raise AttributeError("'%s' is does not name a valid interface on this server" % interface)
         return api.interface(self, interface)
+
+    def __dir__(self):
+        return sorted(set(api.__dict__.keys() + self.__dict__.keys()).union(self.interfaces))
