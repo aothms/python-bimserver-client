@@ -72,8 +72,10 @@ class api:
             )            
             
     def __getattr__(self, interface):
-        if self.interfaces is not None and interface not in self.interfaces:
-        
+        if self.interfaces is None:   # How should this happen?
+            raise AttributeError("There are no interfaces on this server.")
+
+        if interface not in self.interfaces:
             # Some form of compatibility:
             if self.version == "1.4" and not interface.startswith("Bimsie1"):
                 return self.__getattr__("Bimsie1" + interface)
