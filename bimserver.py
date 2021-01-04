@@ -46,7 +46,7 @@ class api:
     interfaces = None
     
     def __init__(self, hostname, username=None, password=None):
-        self.url = "%s/json" % hostname
+        self.url = "%s/json" % hostname.strip('/')
         if not hostname.startswith('http://') and not hostname.startswith('https://'):
             self.url = "http://%s" % self.url
             
