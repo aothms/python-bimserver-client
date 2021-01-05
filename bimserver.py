@@ -1,5 +1,4 @@
 import json
-import operator
 
 try:
     import urllib2
@@ -8,7 +7,7 @@ except:
     import urllib.request
     urlopen = urllib.request.urlopen
 
-class api:
+class Api:
     """
     A minimal BIMserver.org API client. Interfaces are obtained from the server
     and can be retrieved as attributes from an API instance. The interfaces 
@@ -16,11 +15,11 @@ class api:
     
     Example:
     import bimserver
-    client = bimserver.api(server_address, username, password)
+    client = bimserver.Api(server_address, username, password)
     client.Bimsie1ServiceInterface.addProject(projectName="My new project")
     """
     
-    class interface:
+    class Interface:
         def __init__(self, api, name):
             self.api, self.name = api, name
             
@@ -42,10 +41,9 @@ class api:
             return lambda **kwargs: self.make_request(method, **kwargs)
 
         def __dir__(self):
-            interFaceMethods =  self.api.MetaInterface.getServiceMethods(serviceInterfaceName="org.bimserver."+self.name)
-            # TODO use long names
-            interFaceMethodNames = set(method["name"] for method in interfaceMethods)
-            return sorted(set(api.interface.__dict__.keys() + self.__dict__.keys()).union(interFaceMethodNames))
+            methods =  self.api.MetaInterface.getServiceMethods(serviceInterfaceName="org.bimserver."+self.name) # TODO use long names
+            method_names = set(method["name"] for method in methods)
+            return sorted(set(Api.Interface.__dict__.keys() + self.__dict__.keys()).union(method_names))
 
             
             
@@ -80,7 +78,7 @@ class api:
                 return self.__getattr__(interface[len("Bimsie1"):])
                 
             raise AttributeError("'%s' is does not name a valid interface on this server" % interface)
-        return api.interface(self, interface)
+        return Api.Interface(self, interface)
 
     def __dir__(self):
-        return sorted(set(api.__dict__.keys() + self.__dict__.keys()).union(self.interfaces))
+        return sorted(set(Api.__dict__.keys() + self.__dict__.keys()).union(self.interfaces))
