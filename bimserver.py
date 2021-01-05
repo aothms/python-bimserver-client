@@ -67,18 +67,16 @@ class Api:
             )            
             
     def __getattr__(self, interface):
-        if self.interfaces is None:   # How should this happen?
-            raise AttributeError("There are no interfaces on this server.")
+        if self.interfaces is None or interface in self.interfaces:
+            return Api.Interface(self, interface)
 
-        if interface not in self.interfaces:
-            # Some form of compatibility:
-            if self.version == "1.4" and not interface.startswith("Bimsie1"):
-                return self.__getattr__("Bimsie1" + interface)
-            elif self.version == "1.5" and interface.startswith("Bimsie1"):
-                return self.__getattr__(interface[len("Bimsie1"):])
+        # Some form of compatibility:
+        if self.version == "1.4" and not interface.startswith("Bimsie1"):
+            return self.__getattr__("Bimsie1" + interface)
+        elif self.version == "1.5" and interface.startswith("Bimsie1"):
+            return self.__getattr__(interface[len("Bimsie1"):])
                 
-            raise AttributeError("'%s' is does not name a valid interface on this server" % interface)
-        return Api.Interface(self, interface)
+        raise AttributeError("'%s' is does not name a valid interface on this server" % interface)
 
     def __dir__(self):
         return sorted(set(Api.__dict__.keys() + self.__dict__.keys()).union(self.interfaces))
