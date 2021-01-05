@@ -1,4 +1,5 @@
 import json
+import types
 
 try:
     import urllib2
@@ -22,7 +23,18 @@ class Api:
     class Interface:
         def __init__(self, api, name):
             self.api, self.name = api, name
-            
+            meta = self if self.name == "MetaInterface" else self.api.MetaInterface
+            methods = meta.make_request("getServiceMethods", serviceInterfaceName="org.bimserver."+self.name)
+            for method in methods:
+                self.add_method(method)
+
+        def add_method(self, methodMeta):
+            def method(self, **kwargs):
+                return self.make_request(methodMeta["name"], **kwargs)
+            method.__name__ = str(methodMeta["name"])
+            method.__doc__ = methodMeta["doc"]
+            setattr(self, methodMeta["name"], types.MethodType(method, self))
+
         def make_request(self, method, **kwargs):
             request = urlopen(self.api.url, data=json.dumps(dict({
                 "request": {
@@ -38,12 +50,14 @@ class Api:
             else: return response["response"]["result"]
             
         def __getattr__(self, method):
+            print("this should not be called anymore")
             return lambda **kwargs: self.make_request(method, **kwargs)
 
+        def __repr__(self):
+            return self.name
+
         def __dir__(self):
-            methods =  self.api.MetaInterface.getServiceMethods(serviceInterfaceName="org.bimserver."+self.name) # TODO use long names
-            method_names = set(method["name"] for method in methods)
-            return sorted(set(Api.Interface.__dict__.keys() + self.__dict__.keys()).union(method_names))
+            return sorted(set(Api.Interface.__dict__.keys() + self.__dict__.keys()))
 
             
             
@@ -54,11 +68,11 @@ class Api:
         self.url = "%s/json" % hostname.strip('/')
         if not hostname.startswith('http://') and not hostname.startswith('https://'):
             self.url = "http://%s" % self.url
-            
+
         self.interfaces = set(si["simpleName"] for si in self.MetaInterface.getServiceInterfaces())
-        
+
         self.version = "1.4" if "Bimsie1AuthInterface" in self.interfaces else "1.5"
-        
+
         if username is not None and password is not None:
             auth_interface = getattr(self, "Bimsie1AuthInterface", getattr(self, "AuthInterface"))
             self.token = auth_interface.login(
@@ -79,4 +93,4 @@ class Api:
         raise AttributeError("'%s' is does not name a valid interface on this server" % interface)
 
     def __dir__(self):
-        return sorted(set(Api.__dict__.keys() + self.__dict__.keys()).union(self.interfaces))
+        return sorted(set(Api.__dict__.keys()).union(self.__dict__.keys()).union(self.interfaces))
