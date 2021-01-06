@@ -20,7 +20,6 @@ class Api:
     client.Bimsie1ServiceInterface.addProject(projectName="My new project")
     """
 
-
     token = None
     interfaces = None
     
@@ -29,32 +28,30 @@ class Api:
         if not hostname.startswith('http://') and not hostname.startswith('https://'):
             self.url = "http://%s" % self.url
 
-        self.interfaces = set(si["simpleName"] for si in self.MetaInterface.getServiceInterfaces())
+        interfaceMetaList = self.make_request( "MetaInterface", "getServiceInterfaces")
+        # index by short interface name only might fail with multiple name spaces, but currently there is only one
+        self.interfaceNames = [interfaceMeta['simpleName'] for interfaceMeta in interfaceMetaList]
+        for interfaceMeta in interfaceMetaList:
+            setattr(self, interfaceMeta['simpleName'], Interface(self, interfaceMeta['simpleName'], interfaceMeta['name']))
 
-        self.version = "1.4" if "Bimsie1AuthInterface" in self.interfaces else "1.5"
+        self.version = "1.4" if "Bimsie1AuthInterface" in self.interfaceNames else "1.5"
 
         if username is not None and password is not None:
-            auth_interface = getattr(self, "Bimsie1AuthInterface", getattr(self, "AuthInterface"))
-            self.token = auth_interface.login(
+            self.token = self.AuthInterface.login(
                 username=username,
                 password=password
             )            
             
     def __getattr__(self, interface):
-        if self.interfaces is None or interface in self.interfaces:
-            return Interface(self, interface)
-
         # Some form of compatibility:
         if self.version == "1.4" and not interface.startswith("Bimsie1"):
-            return self.__getattr__("Bimsie1" + interface)
+            return getattr(self, "Bimsie1" + interface)
         elif self.version == "1.5" and interface.startswith("Bimsie1"):
-            return self.__getattr__(interface[len("Bimsie1"):])
-                
+            return getattr(self, interface[len("Bimsie1"):])
         raise AttributeError("'%s' is does not name a valid interface on this server" % interface)
 
     def __dir__(self):
-        return sorted(set(Api.__dict__.keys()).union(self.__dict__.keys()).union(self.interfaces))
-
+        return sorted(set(Api.__dict__.keys()).union(self.__dict__.keys()).union(self.interfaceNames))
 
     def make_request(self, interface, method, **kwargs):
         request = urlopen(self.url, data=json.dumps(dict({
@@ -71,12 +68,10 @@ class Api:
         else:
             return response["response"]["result"]
 
-
-
 class Interface:
-    def __init__(self, api, name):
+    def __init__(self, api, name, longName):
         self.api, self.name = api, name
-        methods = self.api.make_request("MetaInterface", "getServiceMethods", serviceInterfaceName="org.bimserver." + self.name)
+        methods = self.api.make_request("MetaInterface", "getServiceMethods", serviceInterfaceName=longName)
         for method in methods:
             self.add_method(method)
 
@@ -87,10 +82,6 @@ class Interface:
         method.__name__ = str(methodMeta["name"])
         method.__doc__ = methodMeta["doc"]
         setattr(self, methodMeta["name"], types.MethodType(method, self))
-
-    def __getattr__(self, method):
-        print("this should not be called anymore")
-        return lambda **kwargs: self.make_request(self.name, method, **kwargs)
 
     def __repr__(self):
         return self.name
