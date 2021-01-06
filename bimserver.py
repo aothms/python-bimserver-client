@@ -1,5 +1,6 @@
 import json
 import types
+import inspect
 
 try:
     import urllib2
@@ -22,7 +23,7 @@ class Api:
 
     token = None
     interfaces = None
-    
+
     def __init__(self, hostname, username=None, password=None):
         self.url = "%s/json" % hostname.strip('/')
         if not hostname.startswith('http://') and not hostname.startswith('https://'):
@@ -70,7 +71,7 @@ class Api:
 
 class Interface:
     def __init__(self, api, name, longName):
-        self.api, self.name = api, name
+        self.api, self.name, self.longName = api, name, longName
         methods = self.api.make_request("MetaInterface", "getServiceMethods", serviceInterfaceName=longName)
         for method in methods:
             self.add_method(method)
@@ -81,6 +82,16 @@ class Interface:
 
         method.__name__ = str(methodMeta["name"])
         method.__doc__ = methodMeta["doc"]
+
+        # add parameter info to doc, will only work after fix of BIMserver issue #1179, TODO: check BIMserver version
+        params = self.api.make_request("MetaInterface", "getServiceMethodParameters", serviceInterfaceName=self.longName, serviceMethodName=methodMeta['name'])
+        try:
+            inspect.signature(method) # TODO for Python >= 3.3, modify signature
+        except AttributeError:
+            pass
+        for p in params:
+            method.__doc__ += "%s : %s\n    %s\n" % (p['name'], p['type']['name'], p['doc'])
+
         setattr(self, methodMeta["name"], types.MethodType(method, self))
 
     def __repr__(self):
