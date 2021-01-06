@@ -19,48 +19,8 @@ class Api:
     client = bimserver.Api(server_address, username, password)
     client.Bimsie1ServiceInterface.addProject(projectName="My new project")
     """
-    
-    class Interface:
-        def __init__(self, api, name):
-            self.api, self.name = api, name
-            meta = self if self.name == "MetaInterface" else self.api.MetaInterface
-            methods = meta.make_request("getServiceMethods", serviceInterfaceName="org.bimserver."+self.name)
-            for method in methods:
-                self.add_method(method)
 
-        def add_method(self, methodMeta):
-            def method(self, **kwargs):
-                return self.make_request(methodMeta["name"], **kwargs)
-            method.__name__ = str(methodMeta["name"])
-            method.__doc__ = methodMeta["doc"]
-            setattr(self, methodMeta["name"], types.MethodType(method, self))
 
-        def make_request(self, method, **kwargs):
-            request = urlopen(self.api.url, data=json.dumps(dict({
-                "request": {
-                    "interface": self.name,
-                    "method": method,
-                    "parameters": kwargs
-                }
-            }, **({"token":self.api.token} if self.api.token else {}))).encode("utf-8"))
-            response = json.loads(request.read().decode("utf-8"))
-            exception = response.get("response", {}).get("exception", None)
-            if exception:
-                raise Exception(exception['message'])
-            else: return response["response"]["result"]
-            
-        def __getattr__(self, method):
-            print("this should not be called anymore")
-            return lambda **kwargs: self.make_request(method, **kwargs)
-
-        def __repr__(self):
-            return self.name
-
-        def __dir__(self):
-            return sorted(set(Api.Interface.__dict__.keys() + self.__dict__.keys()))
-
-            
-            
     token = None
     interfaces = None
     
@@ -82,7 +42,7 @@ class Api:
             
     def __getattr__(self, interface):
         if self.interfaces is None or interface in self.interfaces:
-            return Api.Interface(self, interface)
+            return Interface(self, interface)
 
         # Some form of compatibility:
         if self.version == "1.4" and not interface.startswith("Bimsie1"):
@@ -94,3 +54,46 @@ class Api:
 
     def __dir__(self):
         return sorted(set(Api.__dict__.keys()).union(self.__dict__.keys()).union(self.interfaces))
+
+
+    def make_request(self, interface, method, **kwargs):
+        request = urlopen(self.url, data=json.dumps(dict({
+            "request": {
+                "interface": interface,
+                "method": method,
+                "parameters": kwargs
+            }
+        }, **({"token": self.token} if self.token else {}))).encode("utf-8"))
+        response = json.loads(request.read().decode("utf-8"))
+        exception = response.get("response", {}).get("exception", None)
+        if exception:
+            raise Exception(exception['message'])
+        else:
+            return response["response"]["result"]
+
+
+
+class Interface:
+    def __init__(self, api, name):
+        self.api, self.name = api, name
+        methods = self.api.make_request("MetaInterface", "getServiceMethods", serviceInterfaceName="org.bimserver." + self.name)
+        for method in methods:
+            self.add_method(method)
+
+    def add_method(self, methodMeta):
+        def method(self, **kwargs):
+            return self.api.make_request(self.name, methodMeta["name"], **kwargs)
+
+        method.__name__ = str(methodMeta["name"])
+        method.__doc__ = methodMeta["doc"]
+        setattr(self, methodMeta["name"], types.MethodType(method, self))
+
+    def __getattr__(self, method):
+        print("this should not be called anymore")
+        return lambda **kwargs: self.make_request(self.name, method, **kwargs)
+
+    def __repr__(self):
+        return self.name
+
+    def __dir__(self):
+        return sorted(set(Interface.__dict__.keys()).union(self.__dict__.keys()))
