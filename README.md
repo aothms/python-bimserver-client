@@ -84,3 +84,11 @@ client.Bimsie1ServiceInterface.checkin(
         sync=               "false"
     )
 ```
+
+Enable autocompletion in Python 2
+
+```python
+import rlcompleter, readline
+readline.parse_and_bind('tab:complete')
+```
+

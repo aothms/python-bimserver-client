@@ -9,6 +9,12 @@ except:
     import urllib.request
     urlopen = urllib.request.urlopen
 
+try:
+    inspect.signature(Api.minimumBimServerVersion)
+    canInspectSignature = True
+except AttributeError:
+    canInspectSignature = False
+
 class Api:
     """
     A minimal BIMserver.org API client. Interfaces are obtained from the server
@@ -22,7 +28,6 @@ class Api:
     """
 
     token = None
-    interfaces = None
 
     def __init__(self, hostname, username=None, password=None):
         self.url = "%s/json" % hostname.strip('/')
@@ -65,9 +70,14 @@ class Api:
         response = json.loads(request.read().decode("utf-8"))
         exception = response.get("response", {}).get("exception", None)
         if exception:
-            raise Exception(exception['message'])
+            raise BimserverException(exception['message'])
         else:
             return response["response"]["result"]
+
+    def minimumBimServerVersion(self, requiredVersion):
+        serverInfo = self.make_request("AdminInterface", "getServerInfo")["version"]
+        return all(int(serverInfo[pos]) >= required for pos, required in zip(["major","minor","revision"],requiredVersion))
+
 
 class Interface:
     def __init__(self, api, name, longName):
@@ -75,27 +85,38 @@ class Interface:
         methods = self.api.make_request("MetaInterface", "getServiceMethods", serviceInterfaceName=longName)
         for method in methods:
             self.add_method(method)
+        self.methodNames = [method["name"] for method in methods]
 
     def add_method(self, methodMeta):
         def method(self, **kwargs):
             return self.api.make_request(self.name, methodMeta["name"], **kwargs)
-
         method.__name__ = str(methodMeta["name"])
         method.__doc__ = methodMeta["doc"]
-
-        # add parameter info to doc, will only work after fix of BIMserver issue #1179, TODO: check BIMserver version
-        params = self.api.make_request("MetaInterface", "getServiceMethodParameters", serviceInterfaceName=self.longName, serviceMethodName=methodMeta['name'])
-        try:
-            inspect.signature(method) # TODO for Python >= 3.3, modify signature
-        except AttributeError:
-            pass
-        for p in params:
-            method.__doc__ += "%s : %s\n    %s\n" % (p['name'], p['type']['name'], p['doc'])
-
+        if self.api.minimumBimServerVersion([1,5,183]):
+            self.add_parameters(method, methodMeta)
         setattr(self, methodMeta["name"], types.MethodType(method, self))
+
+    def add_parameters(self, method, methodMeta):
+        params = self.api.make_request("MetaInterface", "getServiceMethodParameters", serviceInterfaceName=self.longName, serviceMethodName=method.__name__)
+        if params:
+            method.__doc__ += '\n'
+        if canInspectSignature: # only for Python >= 3.3, modify signature
+            oldSig = inspect.signature(method)
+            parameters = list(oldSig.parameters.values())[:1]+[inspect.Parameter(p['name'], inspect.Parameter.KEYWORD_ONLY) for p in params]
+             # TODO: allow positional (Parameter.POSITIONAL_OR_KEYWORD) and update kwargs from positional args later in method call
+            method.__signature__ = oldSig.replace(parameters=parameters)  # return_annotation=methodMeta["returnDoc"]
+        for p in params:
+            method.__doc__ += "\n:param %s %s: %s" % (p['type']['simpleName'], p['name'], p['doc'])
+        method.__doc__+="\n:returns: %s" % (methodMeta['returnDoc'])
+
+
 
     def __repr__(self):
         return self.name
 
     def __dir__(self):
         return sorted(set(Interface.__dict__.keys()).union(self.__dict__.keys()))
+
+class BimserverException(Exception):
+    pass
+
